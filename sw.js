@@ -1,7 +1,7 @@
 /* Дела продаж — service worker: приложение открывается без интернета.
    ВАЖНО: при каждой выкладке повышайте VERSION (v1 → v2 → v3 …),
    иначе телефон продолжит показывать старую версию. */
-var VERSION = 'v1';
+var VERSION = 'v2';
 var CACHE = 'dela-prodazh-' + VERSION;
 var FONT_CACHE = 'dela-prodazh-fonts';
 
@@ -50,6 +50,17 @@ self.addEventListener('fetch', function (e) {
   }
 
   if (url.origin !== self.location.origin) return;
+
+  // data.json (календарь): сначала интернет — там свежие данные; без сети — последняя сохранённая копия
+  if (url.pathname.endsWith('/data.json')) {
+    e.respondWith(caches.open(CACHE).then(function (c) {
+      return fetch(req).then(function (res) {
+        if (res.ok) c.put('./data.json', res.clone());
+        return res;
+      }).catch(function () { return c.match('./data.json'); });
+    }));
+    return;
+  }
 
   // Страница: сначала интернет (свежая версия), без сети — из запаса
   if (req.mode === 'navigate') {

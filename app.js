@@ -414,7 +414,75 @@
     });
   }
 
+  // ---------- рабочие дни (data.json обновляется сам по расписанию) ----------
+  var MONTHS_NOM = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
+
+  function renderWorkdays(data) {
+    var main = $("workdays-main"), extra = $("workdays-extra"), upd = $("workdays-updated");
+    var box = $("workdays");
+    var t = todayKey(), year = t.slice(0, 4), month = t.slice(0, 7);
+    var cal = data && data.years && data.years[year];
+    if (!cal || !Array.isArray(cal.nonworking)) {
+      box.classList.add("is-error");
+      main.textContent = data
+        ? "Календарь на " + year + " год пока не загружен. Счётчики работают как обычно."
+        : "Не удалось загрузить календарь рабочих дней. Проверьте интернет — счётчики работают как обычно.";
+      extra.hidden = true;
+      upd.hidden = true;
+      return;
+    }
+    box.classList.remove("is-error");
+    var off = {}, short = {};
+    Object.keys(data.years).forEach(function (y) {  // все годы: чтобы видеть выходные и после Нового года
+      (data.years[y].nonworking || []).forEach(function (k) { off[k] = true; });
+      (data.years[y].short || []).forEach(function (k) { short[k] = true; });
+    });
+
+    // рабочие дни этого месяца: всего и сколько осталось (включая сегодня)
+    var total = 0, left = 0, k = month + "-01";
+    while (k.slice(0, 7) === month) {
+      if (!off[k]) { total++; if (k >= t) left++; }
+      k = addDays(k, 1);
+    }
+    var mName = MONTHS_NOM[+month.slice(5) - 1];
+    main.innerHTML = "<strong>" + mName.charAt(0).toUpperCase() + mName.slice(1) + ":</strong> осталось " +
+      left + " " + plural(left, "рабочий день", "рабочих дня", "рабочих дней") + " из " + total +
+      (off[t] ? " · сегодня выходной" : "");
+
+    // ближайший выходной и ближайший сокращённый день (в пределах 2 месяцев)
+    var notes = [], nextOff = null, nextShort = null;
+    for (var i = 1; i <= 60 && (!nextOff || !nextShort); i++) {
+      var d = addDays(t, i);
+      if (!nextOff && off[d]) nextOff = d;
+      if (!nextShort && short[d]) nextShort = d;
+    }
+    function nice(key) { var dt = fromKey(key); return WEEKDAYS_FULL[weekdayIndex(key)] + ", " + dt.getDate() + " " + MONTHS[dt.getMonth()]; }
+    if (nextOff) notes.push("Ближайший выходной — " + nice(nextOff));
+    if (nextShort) notes.push("сокращённый день — " + nice(nextShort));
+    extra.textContent = notes.join("; ");
+    extra.hidden = !notes.length;
+
+    // «обновлено …»
+    var u = new Date(data.updated);
+    if (!isNaN(u)) {
+      var days = Math.floor((Date.now() - u.getTime()) / 86400000);
+      upd.textContent = "Обновлено " + pad(u.getDate()) + "." + pad(u.getMonth() + 1) + "." + u.getFullYear() +
+        " в " + pad(u.getHours()) + ":" + pad(u.getMinutes()) + (days >= 3 ? " — давно не обновлялось" : "");
+      upd.hidden = false;
+    } else {
+      upd.hidden = true;
+    }
+  }
+
+  function loadWorkdays() {
+    fetch("data.json", { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(renderWorkdays)
+      .catch(function () { renderWorkdays(null); });
+  }
+
   buildCounters();
   bind();
   showTab("day");
+  loadWorkdays();
 })();

@@ -1,0 +1,36 @@
+# Обновляет data.json (производственный календарь) сам по расписанию.
+# Расписание GitHub пишет в UTC: 03:00 UTC = 06:00 по Москве.
+name: Обновить календарь
+
+on:
+  schedule:
+    - cron: "0 3 * * *"   # каждый день в 06:00 МСК
+  workflow_dispatch:       # кнопка «Run workflow» для ручного запуска
+
+permissions:
+  contents: write          # чтобы сохранить data.json в репозиторий
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Собрать данные
+        run: python fetch.py
+
+      - name: Сохранить data.json в репозиторий
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
+          git add data.json
+          if git diff --cached --quiet; then
+            echo "Данные не изменились — сохранять нечего."
+          else
+            git commit -m "Календарь: обновление данных"
+            git push
+          fi

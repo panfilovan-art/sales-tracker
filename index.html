@@ -32,6 +32,13 @@
       </header>
       <button class="link-btn" id="day-today" hidden>Вернуться к сегодняшнему дню</button>
 
+      <!-- Рабочие дни месяца: данные из data.json, обновляются сами каждый день -->
+      <div class="workdays" id="workdays" aria-live="polite">
+        <p class="workdays__main" id="workdays-main">Загружаю календарь рабочих дней…</p>
+        <p class="workdays__extra" id="workdays-extra" hidden></p>
+        <p class="workdays__updated" id="workdays-updated" hidden></p>
+      </div>
+
       <div class="hint" id="hint-empty" hidden>
         <p><strong>Как начать.</strong> Сделали звонок — нажмите «+» у «Звонков». Отправили КП — «+» у «КП». Цели на день можно поменять в «Настройках».</p>
       </div>

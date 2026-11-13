@@ -104,6 +104,22 @@ button:focus-visible, input:focus-visible, textarea:focus-visible {
 }
 .hint p { margin: 0; }
 
+/* рабочие дни месяца */
+.workdays {
+  background: var(--card);
+  border: 1.5px solid var(--line);
+  border-left: 4px solid var(--ink-soft);
+  border-radius: 4px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 15px;
+}
+.workdays p { margin: 0; }
+.workdays__main strong { color: var(--ink); }
+.workdays__extra { margin-top: 4px !important; color: var(--text); font-size: 14px; }
+.workdays__updated { margin-top: 4px !important; color: var(--muted); font-size: 13px; }
+.workdays.is-error { border-left-color: var(--margin); color: var(--muted); }
+
 /* счётчики */
 .counters { display: grid; gap: 10px; }
 
