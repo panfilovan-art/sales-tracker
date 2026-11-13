@@ -1,6 +1,9 @@
 """Собирает производственный календарь РФ и сохраняет его в data.json.
 
-Откуда: xmlcalendar.ru — открытые данные, без ключей и регистрации.
+Откуда (открытые данные, без ключей и регистрации):
+  1) основной — производственный календарь по данным КонсультантПлюс,
+     выложенный на GitHub (github.com/d10xa/holidays-calendar);
+  2) запасной — xmlcalendar.ru (серверы GitHub до него часто не достают).
 Что сохраняем: для текущего и следующего года — список нерабочих дней
 (выходные и праздники) и список сокращённых предпраздничных дней.
 
@@ -17,24 +20,44 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-URL = "https://xmlcalendar.ru/data/ru/{year}/calendar.json"
+URL_MAIN = "https://raw.githubusercontent.com/d10xa/holidays-calendar/master/json/consultant{year}.json"
+URL_SPARE = "https://xmlcalendar.ru/data/ru/{year}/calendar.json"
 OUT = Path(__file__).with_name("data.json")
 MSK = ZoneInfo("Europe/Moscow")
 
 
-def download(year):
+def download(url, year):
     """Скачивает календарь на год. Возвращает словарь или None, если не вышло."""
     try:
-        req = urllib.request.Request(URL.format(year=year), headers={"User-Agent": "sales-tracker-calendar"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        req = urllib.request.Request(url.format(year=year), headers={"User-Agent": "sales-tracker-calendar"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
             return json.load(resp)
     except Exception as err:  # нет сети, 404, битый ответ — всё одно: пропускаем
         print(f"  {year}: источник не ответил ({err})")
         return None
 
 
-def parse(raw, year):
-    """Переводит ответ источника в понятный вид. None — если данные подозрительные."""
+def check(off, short, year):
+    """Проверка здравого смысла: даты этого года и хотя бы 104 выходных (52 недели × 2)."""
+    if len(off) < 104 or any(not d.startswith(f"{year}-") for d in off + short):
+        print(f"  {year}: данные неполные или странные (нерабочих дней {len(off)})")
+        return None
+    return {"nonworking": sorted(off), "short": sorted(short), "workdays": 365 + (year % 4 == 0) - len(off)}
+
+
+def parse_main(raw, year):
+    """Формат основного источника: {"holidays": [даты], "preholidays": [даты]}."""
+    try:
+        off = [str(d) for d in raw["holidays"]]
+        short = [str(d) for d in raw.get("preholidays", [])]
+    except Exception as err:
+        print(f"  {year}: непонятный формат ({err})")
+        return None
+    return check(off, short, year)
+
+
+def parse_spare(raw, year):
+    """Формат xmlcalendar.ru: дни по месяцам, «*» — сокращённый день."""
     try:
         off, short = [], []
         for m in raw["months"]:
@@ -52,11 +75,10 @@ def parse(raw, year):
         print(f"  {year}: непонятный формат ({err})")
         return None
 
-    # проверка здравого смысла: 12 месяцев и хотя бы 104 выходных (52 недели × 2)
-    if months != set(range(1, 13)) or len(off) < 104:
-        print(f"  {year}: данные неполные (месяцев {len(months)}, нерабочих дней {len(off)})")
+    if months != set(range(1, 13)):
+        print(f"  {year}: не все месяцы ({len(months)})")
         return None
-    return {"nonworking": sorted(off), "short": sorted(short), "workdays": 365 + (year % 4 == 0) - len(off)}
+    return check(off, short, year)
 
 
 def main():
@@ -70,8 +92,12 @@ def main():
 
     years = {}
     for year in (now.year, now.year + 1):
-        raw = download(year)
-        data = parse(raw, year) if raw else None
+        data = None
+        for url, parse in ((URL_MAIN, parse_main), (URL_SPARE, parse_spare)):
+            raw = download(url, year)
+            data = parse(raw, year) if raw else None
+            if data:
+                break
         if data:
             years[str(year)] = data
             print(f"  {year}: ок, рабочих дней {data['workdays']}")
@@ -85,7 +111,7 @@ def main():
 
     result = {
         "updated": now.isoformat(timespec="minutes"),
-        "source": "Производственный календарь РФ, xmlcalendar.ru",
+        "source": "Производственный календарь РФ (КонсультантПлюс / xmlcalendar.ru)",
         "years": years,
     }
     OUT.write_text(json.dumps(result, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")

@@ -27,6 +27,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
+          if [ ! -f data.json ]; then
+            echo "data.json не появился (источники не ответили) — сохранять нечего."
+            exit 0
+          fi
           git add data.json
           if git diff --cached --quiet; then
             echo "Данные не изменились — сохранять нечего."
