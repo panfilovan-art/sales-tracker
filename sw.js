@@ -1,7 +1,7 @@
 /* Дела продаж — service worker: приложение открывается без интернета.
    ВАЖНО: при каждой выкладке повышайте VERSION (v1 → v2 → v3 …),
    иначе телефон продолжит показывать старую версию. */
-var VERSION = 'v2';
+var VERSION = 'v3';
 var CACHE = 'dela-prodazh-' + VERSION;
 var FONT_CACHE = 'dela-prodazh-fonts';
 
