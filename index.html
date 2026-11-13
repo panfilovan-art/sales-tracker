@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Дела продаж</title>
+  <meta name="theme-color" content="#f7f9fd">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="page">
+
+    <!-- Экран «Сегодня» -->
+    <section class="screen" id="screen-day" data-screen="day">
+      <header class="daybar">
+        <button class="nav-btn" id="day-prev" aria-label="Предыдущий день">‹</button>
+        <div class="daybar__title">
+          <h1 id="day-title">Сегодня</h1>
+          <p id="day-sub" class="muted"></p>
+        </div>
+        <button class="nav-btn" id="day-next" aria-label="Следующий день">›</button>
+      </header>
+      <button class="link-btn" id="day-today" hidden>Вернуться к сегодняшнему дню</button>
+
+      <div class="hint" id="hint-empty" hidden>
+        <p><strong>Как начать.</strong> Сделали звонок — нажмите «+» у «Звонков». Отправили КП — «+» у «КП». Цели на день можно поменять в «Настройках».</p>
+      </div>
+
+      <div class="counters" id="counters"></div>
+
+      <label class="note">
+        <span class="note__label">Заметка дня</span>
+        <textarea id="note" rows="2" maxlength="300" placeholder="Например: договорилась о демо на пятницу"></textarea>
+      </label>
+
+      <p class="streak" id="streak"></p>
+
+      <button class="primary-btn" id="copy-day">Скопировать отчёт за день</button>
+    </section>
+
+    <!-- Экран «Неделя» -->
+    <section class="screen" id="screen-week" data-screen="week" hidden>
+      <header class="daybar">
+        <button class="nav-btn" id="week-prev" aria-label="Прошлая неделя">‹</button>
+        <div class="daybar__title">
+          <h1>Неделя</h1>
+          <p id="week-sub" class="muted"></p>
+        </div>
+        <button class="nav-btn" id="week-next" aria-label="Следующая неделя">›</button>
+      </header>
+      <div class="table-wrap">
+        <table class="week" id="week-table"></table>
+      </div>
+      <p class="muted small" id="week-empty" hidden>На этой неделе пока нет отметок. Вернитесь на «Сегодня» и нажмите «+».</p>
+      <p class="muted small">✅ у дня — выполнена цель хотя бы по одному счётчику. Цифра зелёная — цель по этому счётчику выполнена.</p>
+      <button class="primary-btn" id="copy-week">Скопировать отчёт за неделю</button>
+    </section>
+
+    <!-- Экран «Настройки» -->
+    <section class="screen" id="screen-settings" data-screen="settings" hidden>
+      <header class="plainbar"><h1>Настройки</h1></header>
+
+      <div class="group">
+        <h2>Имя для отчёта</h2>
+        <input type="text" id="name" maxlength="40" placeholder="Например: Наталья" autocomplete="off">
+      </div>
+
+      <div class="group">
+        <h2>Цели на день</h2>
+        <div class="goals" id="goals"></div>
+        <p class="muted small">0 — без цели. Новая цель действует для сегодняшнего и следующих дней.</p>
+      </div>
+
+      <div class="group">
+        <h2>Копия данных</h2>
+        <p class="muted small">Данные хранятся только в этом браузере. Скачивайте копию время от времени — если браузер очистится, её можно загрузить обратно.</p>
+        <div class="row-btns">
+          <button class="secondary-btn" id="export">Скачать копию данных</button>
+          <button class="secondary-btn" id="import-btn">Загрузить копию</button>
+          <input type="file" id="import" accept="application/json,.json" hidden>
+        </div>
+      </div>
+
+      <div class="group group--danger">
+        <h2>Очистить</h2>
+        <p class="muted small">Удалит все отметки, заметки, цели и имя в этом браузере.</p>
+        <button class="danger-btn" id="clear">Очистить все данные</button>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabs" aria-label="Экраны">
+    <button class="tab is-active" data-tab="day"><span class="tab__icon" aria-hidden="true">✎</span>Сегодня</button>
+    <button class="tab" data-tab="week"><span class="tab__icon" aria-hidden="true">▦</span>Неделя</button>
+    <button class="tab" data-tab="settings"><span class="tab__icon" aria-hidden="true">⚙</span>Настройки</button>
+  </nav>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
