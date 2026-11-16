@@ -27,7 +27,78 @@
 
   // ---------- хранилище ----------
   function emptyState() {
-    return { version: 1, name: "", goals: Object.assign({}, DEFAULT_GOALS), days: {} };
+    return {
+      version: 1, name: "", goals: Object.assign({}, DEFAULT_GOALS), days: {},
+      payments: { expected: [], received: [] },
+      hints: [] // [{ name: "ООО «Ромашка»", items: ["Продление лицензии", …] }]
+    };
+  }
+
+  // ---------- оплаты: проверка данных ----------
+  function cleanText(v, max) { return typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, max) : ""; }
+  function cleanMoney(v) {
+    var n = typeof v === "number" ? v : parseInt(String(v || "").replace(/[^\d]/g, ""), 10);
+    if (isNaN(n) || n <= 0) return 0;
+    return Math.min(Math.round(n), 99999999999);
+  }
+  function isDateKey(v) { return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v); }
+  function isMonthKey(v) { return typeof v === "string" && /^\d{4}-\d{2}$/.test(v); }
+
+  function normalizePayments(raw, s) {
+    var p = raw && raw.payments;
+    if (p && Array.isArray(p.expected)) {
+      p.expected.forEach(function (e) {
+        if (!e || typeof e !== "object") return;
+        var item = {
+          id: cleanText(e.id, 40) || newId(),
+          month: isMonthKey(e.month) ? e.month : (isDateKey(e.due) ? e.due.slice(0, 7) : ""),
+          client: cleanText(e.client, 80),
+          item: cleanText(e.item, 120),
+          amount: cleanMoney(e.amount),
+          due: isDateKey(e.due) ? e.due : ""
+        };
+        if (item.month && item.client && item.amount) s.payments.expected.push(item);
+      });
+    }
+    if (p && Array.isArray(p.received)) {
+      p.received.forEach(function (r) {
+        if (!r || typeof r !== "object") return;
+        var item = {
+          id: cleanText(r.id, 40) || newId(),
+          date: isDateKey(r.date) ? r.date : "",
+          client: cleanText(r.client, 80),
+          item: cleanText(r.item, 120),
+          amount: cleanMoney(r.amount),
+          expectedId: cleanText(r.expectedId, 40)
+        };
+        if (item.date && item.client && item.amount) s.payments.received.push(item);
+      });
+    }
+    if (Array.isArray(raw && raw.hints)) {
+      raw.hints.forEach(function (h) {
+        if (!h) return;
+        var name = cleanText(h.name, 80);
+        if (!name) return;
+        var items = Array.isArray(h.items) ? h.items.map(function (i) { return cleanText(i, 120); }).filter(Boolean) : [];
+        addHintTo(s.hints, name, null);
+        items.forEach(function (i) { addHintTo(s.hints, name, i); });
+      });
+    }
+  }
+
+  function newId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  // подсказки: клиент и то, за что он платит
+  function sameText(a, b) { return a.toLowerCase().replace(/ё/g, "е") === b.toLowerCase().replace(/ё/g, "е"); }
+  function findHint(list, name) {
+    for (var i = 0; i < list.length; i++) if (sameText(list[i].name, name)) return list[i];
+    return null;
+  }
+  function addHintTo(list, name, item) {
+    var h = findHint(list, name);
+    if (!h) { h = { name: name, items: [] }; list.push(h); }
+    if (item && !h.items.some(function (x) { return sameText(x, item); })) h.items.unshift(item);
+    return h;
   }
 
   function normalize(raw) {
@@ -50,6 +121,7 @@
         s.days[k] = day;
       });
     }
+    normalizePayments(raw, s);
     return s;
   }
 
@@ -77,7 +149,7 @@
   }
 
   var state = load();
-  var view = { day: todayKey(), week: mondayOf(todayKey()), tab: "day" };
+  var view = { day: todayKey(), week: mondayOf(todayKey()), month: todayKey().slice(0, 7), tab: "day" };
 
   // ---------- логика дня ----------
   function getDay(k) { return state.days[k]; }
@@ -290,7 +362,9 @@
   function render() {
     renderDay();
     renderWeek();
+    renderPay();
     renderSettings();
+    renderHints();
   }
 
   function showTab(tab) {
@@ -400,6 +474,8 @@
       try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ничего */ }
       view.day = todayKey();
       view.week = mondayOf(todayKey());
+      view.month = todayKey().slice(0, 7);
+      closePayForm();
       render();
       toast("Все данные удалены");
     });
@@ -414,8 +490,298 @@
     });
   }
 
+  // ---------- оплаты ----------
+  function money(n) { return Math.round(n).toLocaleString("ru-RU").replace(/ | /g, " ") + " ₽"; }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; });
+  }
+  function addMonths(m, n) {
+    var y = +m.slice(0, 4), mo = +m.slice(5) - 1 + n;
+    var d = new Date(y, mo, 1);
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1);
+  }
+  function monthName(m) { var n = MONTHS_NOM[+m.slice(5) - 1]; return n + " " + m.slice(0, 4); }
+  function monthNameCap(m) { var n = monthName(m); return n.charAt(0).toUpperCase() + n.slice(1); }
+  // «в ноябре»
+  var MONTHS_IN = ["январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре"];
+
+  function sumReceived(from, to) { // включительно, ключи дат
+    return state.payments.received.reduce(function (s, r) { return r.date >= from && r.date <= to ? s + r.amount : s; }, 0);
+  }
+  function receivedFor(expId) {
+    return state.payments.received.reduce(function (s, r) { return r.expectedId === expId ? s + r.amount : s; }, 0);
+  }
+  function expectedIn(m) { return state.payments.expected.filter(function (e) { return e.month === m; }); }
+  function receivedIn(m) {
+    return state.payments.received.filter(function (r) { return r.date.slice(0, 7) === m; })
+      .sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : 0; });
+  }
+  function lastDayOf(m) { var d = new Date(+m.slice(0, 4), +m.slice(5), 0); return toKey(d); }
+
+  // цвет полоски плавно меняется: красный → жёлтый → зелёный
+  function planColor(p) {
+    var stops = [[216, 64, 74], [224, 161, 0], [35, 133, 90]]; // красный, жёлтый, зелёный
+    p = Math.max(0, Math.min(1, p));
+    var a = p < 0.5 ? stops[0] : stops[1], b = p < 0.5 ? stops[1] : stops[2], k = p < 0.5 ? p * 2 : (p - 0.5) * 2;
+    return "rgb(" + a.map(function (v, i) { return Math.round(v + (b[i] - v) * k); }).join(", ") + ")";
+  }
+
+  function renderPay() {
+    var m = view.month, t = todayKey(), cur = t.slice(0, 7);
+    $("month-sub").textContent = monthName(m) + (m === cur ? ", этот месяц" : "");
+    $("month-now").hidden = m === cur;
+
+    $("sum-day").textContent = money(sumReceived(t, t));
+    $("sum-week").textContent = money(sumReceived(mondayOf(t), addDays(mondayOf(t), 6)));
+    $("sum-month-label").textContent = monthNameCap(m).split(" ")[0];
+    var got = sumReceived(m + "-01", lastDayOf(m));
+    $("sum-month").textContent = money(got);
+
+    // план = все ожидаемые оплаты месяца
+    var exp = expectedIn(m);
+    var plan = exp.reduce(function (s, e) { return s + e.amount; }, 0);
+    var fill = $("plan-fill");
+    if (plan > 0) {
+      var p = got / plan, pct = Math.round(p * 100);
+      $("plan-text").innerHTML = "Поступило <strong>" + money(got) + "</strong> из " + money(plan);
+      $("plan-pct").textContent = pct + "%";
+      fill.style.width = Math.min(100, p * 100) + "%";
+      fill.style.background = planColor(p);
+      var left = Math.max(0, plan - got);
+      $("plan-note").textContent = left > 0 ? "Осталось получить " + money(left) : "План месяца выполнен 🎉";
+    } else {
+      $("plan-text").innerHTML = "Поступило <strong>" + money(got) + "</strong>";
+      $("plan-pct").textContent = "";
+      fill.style.width = "0";
+      $("plan-note").textContent = "Добавьте, кто оплатит в этом месяце — полоска покажет, сколько из плана уже пришло.";
+    }
+
+    // список «Ждём оплату»
+    var mIn = MONTHS_IN[+m.slice(5) - 1];
+    $("exp-title").textContent = "Ждём оплату в " + mIn;
+    var sorted = exp.slice().sort(function (a, b) {
+      var pa = receivedFor(a.id) >= a.amount, pb = receivedFor(b.id) >= b.amount;
+      if (pa !== pb) return pa ? 1 : -1;
+      return (a.due || "9999") < (b.due || "9999") ? -1 : (a.due || "9999") > (b.due || "9999") ? 1 : 0;
+    });
+    $("exp-list").innerHTML = sorted.map(function (e) {
+      var r = receivedFor(e.id), paid = r >= e.amount;
+      var overdue = !paid && e.due && e.due < t;
+      var sub = esc(e.item) + (e.due ? " · до " + shortDate(e.due) : "");
+      var status = paid
+        ? "<span class='pill pill--done'>оплачено</span>"
+        : (r > 0 ? "<span class='pill pill--part'>пришло " + money(r) + "</span>" : "") +
+          "<button type='button' class='pay-btn' data-act='paid' data-id='" + esc(e.id) + "'>Пришла</button>";
+      return "<li class='payrow" + (paid ? " is-paid" : "") + (overdue ? " is-overdue" : "") + "'>" +
+        "<div class='payrow__main'><div class='payrow__client'>" + esc(e.client) + "</div>" +
+        "<div class='payrow__sub'>" + sub + (overdue ? " · <b>срок прошёл</b>" : "") + "</div></div>" +
+        "<div class='payrow__side'><div class='payrow__sum'>" + money(e.amount) + "</div>" + status + "</div>" +
+        "<button type='button' class='del-btn' data-act='del-exp' data-id='" + esc(e.id) + "' aria-label='Удалить: " + esc(e.client) + "'>×</button>" +
+        "</li>";
+    }).join("");
+    $("exp-empty").hidden = exp.length > 0;
+
+    // список «Поступило»
+    var rec = receivedIn(m);
+    $("rec-title").textContent = "Поступило в " + mIn;
+    $("rec-list").innerHTML = rec.map(function (r) {
+      return "<li class='payrow'>" +
+        "<div class='payrow__main'><div class='payrow__client'>" + esc(r.client) + "</div>" +
+        "<div class='payrow__sub'>" + esc(r.item) + " · " + shortDate(r.date) + "</div></div>" +
+        "<div class='payrow__side'><span class='pill pill--done pill--sum'>" + money(r.amount) + "</span></div>" +
+        "<button type='button' class='del-btn' data-act='del-rec' data-id='" + esc(r.id) + "' aria-label='Удалить поступление: " + esc(r.client) + "'>×</button>" +
+        "</li>";
+    }).join("");
+    $("rec-empty").hidden = rec.length > 0;
+  }
+
+  function monthReport(m) {
+    var exp = expectedIn(m), rec = receivedIn(m).slice().reverse();
+    var plan = exp.reduce(function (s, e) { return s + e.amount; }, 0);
+    var got = rec.reduce(function (s, r) { return s + r.amount; }, 0);
+    var lines = ["Оплаты за " + monthName(m) + (state.name ? " — " + state.name : "")];
+    lines.push("Поступило: " + money(got) + (plan > 0 ? " из " + money(plan) + " (" + Math.round(got / plan * 100) + "%)" : ""));
+    if (rec.length) {
+      lines.push("", "Пришло:");
+      rec.forEach(function (r) { lines.push("— " + r.client + ", " + r.item + " — " + money(r.amount) + " (" + shortDate(r.date) + ")"); });
+    }
+    var waiting = exp.filter(function (e) { return receivedFor(e.id) < e.amount; });
+    if (waiting.length) {
+      lines.push("", "Ждём:");
+      waiting.forEach(function (e) {
+        var left = e.amount - receivedFor(e.id);
+        lines.push("— " + e.client + ", " + e.item + " — " + money(left) + (e.due ? " (до " + shortDate(e.due) + ")" : ""));
+      });
+    }
+    return lines.join("\n");
+  }
+
+  // ----- форма оплаты -----
+  var form = { mode: "expected", expectedId: "" };
+
+  function fillClientList() {
+    $("dl-clients").innerHTML = state.hints.map(function (h) { return "<option value='" + esc(h.name) + "'>"; }).join("");
+  }
+  function fillItemList() {
+    var client = cleanText($("pf-client").value, 80);
+    var h = client ? findHint(state.hints, client) : null;
+    var own = h ? h.items : [];
+    var all = own.slice();
+    state.hints.forEach(function (x) {
+      x.items.forEach(function (i) { if (!all.some(function (a) { return sameText(a, i); })) all.push(i); });
+    });
+    $("dl-items").innerHTML = all.map(function (i) { return "<option value='" + esc(i) + "'>"; }).join("");
+    var hint = $("pf-item-hint");
+    if (own.length) {
+      hint.textContent = "Раньше платил за: " + own.slice(0, 3).join(" · ");
+      hint.hidden = false;
+    } else {
+      hint.hidden = true;
+    }
+  }
+
+  function openPayForm(mode, exp) {
+    form.mode = mode;
+    form.expectedId = exp ? exp.id : "";
+    var t = todayKey();
+    $("payform-title").textContent = mode === "expected" ? "Ждём оплату" : (exp ? "Пришла оплата от клиента" : "Пришла оплата");
+    $("pf-date-label").textContent = mode === "expected" ? "Ждём до (можно не указывать)" : "Дата поступления";
+    $("pf-client").value = exp ? exp.client : "";
+    $("pf-item").value = exp ? exp.item : "";
+    $("pf-amount").value = exp ? String(Math.max(0, exp.amount - receivedFor(exp.id))).replace(/\B(?=(\d{3})+(?!\d))/g, " ") : "";
+    if (mode === "expected") {
+      $("pf-date").value = "";
+      $("pf-date").min = view.month + "-01";
+      $("pf-date").max = lastDayOf(view.month);
+    } else {
+      $("pf-date").value = t;
+      $("pf-date").removeAttribute("min");
+      $("pf-date").removeAttribute("max");
+    }
+    $("pf-error").hidden = true;
+    fillClientList();
+    fillItemList();
+    $("payform").hidden = false;
+    $("payform").scrollIntoView({ behavior: "smooth", block: "start" });
+    (exp ? $("pf-amount") : $("pf-client")).focus({ preventScroll: true });
+  }
+
+  function closePayForm() {
+    $("payform").hidden = true;
+    form.expectedId = "";
+  }
+
+  function payError(msg, field) {
+    var el = $("pf-error");
+    el.textContent = msg;
+    el.hidden = false;
+    if (field) $(field).focus();
+  }
+
+  function savePayForm() {
+    var client = cleanText($("pf-client").value, 80);
+    var item = cleanText($("pf-item").value, 120);
+    var amount = cleanMoney($("pf-amount").value);
+    var date = $("pf-date").value;
+    if (!client) return payError("Напишите название клиента", "pf-client");
+    if (!item) return payError("Напишите, за что оплата", "pf-item");
+    if (!amount) return payError("Укажите сумму больше нуля", "pf-amount");
+
+    // если клиент уже есть в подсказках — берём его написание
+    var known = findHint(state.hints, client);
+    if (known) client = known.name;
+
+    if (form.mode === "expected") {
+      if (date && !isDateKey(date)) return payError("Проверьте дату", "pf-date");
+      state.payments.expected.push({
+        id: newId(), month: date ? date.slice(0, 7) : view.month,
+        client: client, item: item, amount: amount, due: date || ""
+      });
+      toast("Записано: ждём " + money(amount));
+    } else {
+      if (!isDateKey(date)) return payError("Укажите дату поступления", "pf-date");
+      state.payments.received.push({
+        id: newId(), date: date, client: client, item: item, amount: amount, expectedId: form.expectedId
+      });
+      toast("Поступление записано: " + money(amount));
+      if (date.slice(0, 7) !== view.month && !form.expectedId) view.month = date.slice(0, 7);
+    }
+    addHintTo(state.hints, client, item);
+    save();
+    closePayForm();
+    renderPay();
+    renderHints();
+  }
+
+  function renderHints() {
+    var box = $("hint-list");
+    if (!state.hints.length) {
+      box.innerHTML = "<li class='muted small'>Пока пусто — клиенты появятся здесь, когда Вы запишете первую оплату.</li>";
+      return;
+    }
+    box.innerHTML = state.hints.slice().sort(function (a, b) { return a.name.localeCompare(b.name, "ru"); }).map(function (h) {
+      return "<li><div><div class='payrow__client'>" + esc(h.name) + "</div>" +
+        (h.items.length ? "<div class='payrow__sub'>" + h.items.map(esc).join(" · ") + "</div>" : "") +
+        "</div><button type='button' class='del-btn' data-name='" + esc(h.name) + "' aria-label='Удалить подсказку: " + esc(h.name) + "'>×</button></li>";
+    }).join("");
+  }
+
+  function bindPay() {
+    $("month-prev").addEventListener("click", function () { view.month = addMonths(view.month, -1); closePayForm(); renderPay(); });
+    $("month-next").addEventListener("click", function () { view.month = addMonths(view.month, 1); closePayForm(); renderPay(); });
+    $("month-now").addEventListener("click", function () { view.month = todayKey().slice(0, 7); closePayForm(); renderPay(); });
+
+    $("add-expected").addEventListener("click", function () { openPayForm("expected", null); });
+    $("add-received").addEventListener("click", function () { openPayForm("received", null); });
+    $("pf-cancel").addEventListener("click", closePayForm);
+    $("payform").addEventListener("submit", function (e) { e.preventDefault(); savePayForm(); });
+    $("pf-client").addEventListener("input", function () { fillItemList(); $("pf-error").hidden = true; });
+    ["pf-item", "pf-amount", "pf-date"].forEach(function (id) {
+      $(id).addEventListener("input", function () { $("pf-error").hidden = true; });
+    });
+    // сумма с пробелами между тысячами
+    $("pf-amount").addEventListener("blur", function (e) {
+      var n = cleanMoney(e.target.value);
+      e.target.value = n ? String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ") : "";
+    });
+
+    $("exp-list").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-act]");
+      if (!b) return;
+      var exp = state.payments.expected.filter(function (x) { return x.id === b.dataset.id; })[0];
+      if (!exp) return;
+      if (b.dataset.act === "paid") openPayForm("received", exp);
+      if (b.dataset.act === "del-exp") {
+        if (!window.confirm("Удалить «" + exp.client + "» из списка ожидаемых оплат? Уже записанные поступления останутся.")) return;
+        state.payments.expected = state.payments.expected.filter(function (x) { return x.id !== exp.id; });
+        state.payments.received.forEach(function (r) { if (r.expectedId === exp.id) r.expectedId = ""; });
+        save();
+        renderPay();
+      }
+    });
+    $("rec-list").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-act='del-rec']");
+      if (!b) return;
+      var rec = state.payments.received.filter(function (x) { return x.id === b.dataset.id; })[0];
+      if (!rec) return;
+      if (!window.confirm("Удалить поступление " + money(rec.amount) + " от «" + rec.client + "»?")) return;
+      state.payments.received = state.payments.received.filter(function (x) { return x.id !== rec.id; });
+      save();
+      renderPay();
+    });
+    $("hint-list").addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-name]");
+      if (!b) return;
+      if (!window.confirm("Убрать «" + b.dataset.name + "» из подсказок? Оплаты этого клиента останутся.")) return;
+      state.hints = state.hints.filter(function (h) { return h.name !== b.dataset.name; });
+      save();
+      renderHints();
+    });
+    $("copy-month").addEventListener("click", function () { copyText(monthReport(view.month)); });
+  }
+
   // ---------- рабочие дни (data.json обновляется сам по расписанию) ----------
-  var MONTHS_NOM = ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
+  var MONTHS_NOM =["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"];
 
   function renderWorkdays(data) {
     var main = $("workdays-main"), extra = $("workdays-extra"), upd = $("workdays-updated");
@@ -483,6 +849,7 @@
 
   buildCounters();
   bind();
+  bindPay();
   showTab("day");
   loadWorkdays();
 })();

@@ -73,6 +73,79 @@
       <button class="primary-btn" id="copy-week">Скопировать отчёт за неделю</button>
     </section>
 
+    <!-- Экран «Оплаты» -->
+    <section class="screen" id="screen-pay" data-screen="pay" hidden>
+      <header class="daybar">
+        <button class="nav-btn" id="month-prev" aria-label="Прошлый месяц">‹</button>
+        <div class="daybar__title">
+          <h1>Оплаты</h1>
+          <p id="month-sub" class="muted"></p>
+        </div>
+        <button class="nav-btn" id="month-next" aria-label="Следующий месяц">›</button>
+      </header>
+      <button class="link-btn" id="month-now" hidden>Вернуться к текущему месяцу</button>
+
+      <div class="totals">
+        <div class="total"><span class="total__label">Сегодня</span><span class="total__value" id="sum-day">0 ₽</span></div>
+        <div class="total"><span class="total__label">Эта неделя</span><span class="total__value" id="sum-week">0 ₽</span></div>
+        <div class="total"><span class="total__label" id="sum-month-label">Месяц</span><span class="total__value" id="sum-month">0 ₽</span></div>
+      </div>
+
+      <div class="plan">
+        <div class="plan__head">
+          <span id="plan-text">Поступило 0 ₽</span>
+          <strong id="plan-pct"></strong>
+        </div>
+        <div class="plan__bar"><div class="plan__fill" id="plan-fill"></div></div>
+        <p class="plan__note" id="plan-note"></p>
+      </div>
+
+      <div class="row-btns row-btns--two">
+        <button class="secondary-btn" id="add-expected">+ Ждём оплату</button>
+        <button class="secondary-btn" id="add-received">+ Пришла оплата</button>
+      </div>
+
+      <form class="payform" id="payform" hidden autocomplete="off" novalidate>
+        <h2 id="payform-title">Ждём оплату</h2>
+        <label class="field">
+          <span>Клиент</span>
+          <input type="text" id="pf-client" list="dl-clients" maxlength="80" placeholder="Например: ООО «Ромашка»" required>
+        </label>
+        <label class="field">
+          <span>За что</span>
+          <input type="text" id="pf-item" list="dl-items" maxlength="120" placeholder="Например: продление лицензии на год" required>
+          <span class="field__hint" id="pf-item-hint" hidden></span>
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>Сумма, ₽</span>
+            <input type="text" id="pf-amount" inputmode="numeric" maxlength="15" placeholder="250 000" required>
+          </label>
+          <label class="field">
+            <span id="pf-date-label">Ждём до</span>
+            <input type="date" id="pf-date">
+          </label>
+        </div>
+        <p class="field__error" id="pf-error" hidden></p>
+        <div class="row-btns row-btns--two">
+          <button type="button" class="secondary-btn" id="pf-cancel">Отмена</button>
+          <button type="submit" class="primary-btn primary-btn--form" id="pf-save">Сохранить</button>
+        </div>
+        <datalist id="dl-clients"></datalist>
+        <datalist id="dl-items"></datalist>
+      </form>
+
+      <h2 class="list-title" id="exp-title">Ждём оплату</h2>
+      <ul class="paylist" id="exp-list"></ul>
+      <p class="muted small" id="exp-empty">Пока пусто. Нажмите «+ Ждём оплату» и запишите, кто оплатит в этом месяце.</p>
+
+      <h2 class="list-title" id="rec-title">Поступило</h2>
+      <ul class="paylist" id="rec-list"></ul>
+      <p class="muted small" id="rec-empty">Поступлений пока нет. Пришли деньги — нажмите «Пришла» у клиента или «+ Пришла оплата».</p>
+
+      <button class="primary-btn" id="copy-month">Скопировать отчёт за месяц</button>
+    </section>
+
     <!-- Экран «Настройки» -->
     <section class="screen" id="screen-settings" data-screen="settings" hidden>
       <header class="plainbar"><h1>Настройки</h1></header>
@@ -89,6 +162,12 @@
       </div>
 
       <div class="group">
+        <h2>Подсказки: клиенты</h2>
+        <p class="muted small">Клиенты и то, за что они платят, запоминаются сами и всплывают при заполнении оплат. Лишнее можно удалить — сами оплаты при этом не пропадут.</p>
+        <ul class="hintlist" id="hint-list"></ul>
+      </div>
+
+      <div class="group">
         <h2>Копия данных</h2>
         <p class="muted small">Данные хранятся только в этом браузере. Скачивайте копию время от времени — если браузер очистится, её можно загрузить обратно.</p>
         <div class="row-btns">
@@ -100,7 +179,7 @@
 
       <div class="group group--danger">
         <h2>Очистить</h2>
-        <p class="muted small">Удалит все отметки, заметки, цели и имя в этом браузере.</p>
+        <p class="muted small">Удалит все отметки, заметки, цели, оплаты, подсказки и имя в этом браузере.</p>
         <button class="danger-btn" id="clear">Очистить все данные</button>
       </div>
     </section>
@@ -109,6 +188,7 @@
   <nav class="tabs" aria-label="Экраны">
     <button class="tab is-active" data-tab="day"><span class="tab__icon" aria-hidden="true">✎</span>Сегодня</button>
     <button class="tab" data-tab="week"><span class="tab__icon" aria-hidden="true">▦</span>Неделя</button>
+    <button class="tab" data-tab="pay"><span class="tab__icon" aria-hidden="true">₽</span>Оплаты</button>
     <button class="tab" data-tab="settings"><span class="tab__icon" aria-hidden="true">⚙</span>Настройки</button>
   </nav>
 
