@@ -1,15 +1,17 @@
 /* Дела продаж — service worker: приложение открывается без интернета.
    ВАЖНО: при каждой выкладке повышайте VERSION (v1 → v2 → v3 …),
-   иначе телефон продолжит показывать старую версию. */
-var VERSION = 'v5';
+   иначе телефон продолжит показывать старую версию.
+   И тот же номер — в index.html у style.css?v=N и app.js?v=N и в списке FILES ниже:
+   так новая страница никогда не возьмёт старые стили и код из запаса. */
+var VERSION = 'v6';
 var CACHE = 'dela-prodazh-' + VERSION;
 var FONT_CACHE = 'dela-prodazh-fonts';
 
 var FILES = [
   './',
   './index.html',
-  './style.css',
-  './app.js',
+  './style.css?v=6',
+  './app.js?v=6',
   './manifest.webmanifest',
   './icons/icon.svg',
   './icons/icon-192.png',

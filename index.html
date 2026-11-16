@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
   <main class="page">
@@ -186,15 +186,15 @@
   </main>
 
   <nav class="tabs" aria-label="Экраны">
-    <button class="tab is-active" data-tab="day"><span class="tab__icon" aria-hidden="true">✎</span>Сегодня</button>
+    <button class="tab is-active" data-tab="day"><span class="tab__icon" aria-hidden="true">✎&#xFE0E;</span>Сегодня</button>
     <button class="tab" data-tab="week"><span class="tab__icon" aria-hidden="true">▦</span>Неделя</button>
     <button class="tab" data-tab="pay"><span class="tab__icon" aria-hidden="true">₽</span>Оплаты</button>
-    <button class="tab" data-tab="settings"><span class="tab__icon" aria-hidden="true">⚙</span>Настройки</button>
+    <button class="tab" data-tab="settings"><span class="tab__icon" aria-hidden="true">⚙&#xFE0E;</span>Настройки</button>
   </nav>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=6"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
